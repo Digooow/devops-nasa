@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Diário do Cosmos: explore a Imagem Astronômica do Dia (APOD) da NASA com suporte a imagens, vídeos e seleção de datas.">
+  <title>Diário do Cosmos — NASA APOD</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="brand-badge">NASA APOD API</span>
+        <h1>Diário do Cosmos</h1>
+        <p class="subtitle">Explore diariamente o universo através das imagens, vídeos e explicações astronômicas da NASA.</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <section class="controls-panel" aria-label="Seleção de data do APOD">
+      <form id="date-form" class="date-form">
+        <div class="date-input-group">
+          <label for="apod-date" class="control-label">Escolher data</label>
+          <div class="input-action-row">
+            <input
+              type="date"
+              id="apod-date"
+              name="date"
+              min="1995-06-16"
+              aria-describedby="date-help"
+            >
+            <button type="submit" id="fetch-date-btn" class="btn btn-primary">
+              Ver data
+            </button>
+          </div>
+          <small id="date-help" class="control-help">Arquivo disponível desde 16/06/1995.</small>
+        </div>
+
+        <div class="nav-buttons" role="group" aria-label="Navegação rápida entre datas">
+          <button type="button" id="prev-day-btn" class="btn btn-secondary">
+            ◀ Dia Anterior
+          </button>
+          <button type="button" id="today-btn" class="btn btn-secondary">
+            Hoje
+          </button>
+          <button type="button" id="next-day-btn" class="btn btn-secondary">
+            Próximo Dia ▶
+          </button>
+          <button type="button" id="random-day-btn" class="btn btn-ghost">
+            Data Aleatória
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section
+      id="loading-state"
+      class="status-card loading-card"
+      role="status"
+      aria-live="polite"
+      hidden
+    >
+      <div class="cosmic-spinner" aria-hidden="true"></div>
+      <h2>Carregando registro do cosmos...</h2>
+      <p>Consultando os arquivos da NASA com segurança. Aguarde um instante.</p>
+    </section>
+
+    <section
+      id="error-state"
+      class="status-card error-card"
+      role="alert"
+      aria-live="assertive"
+      hidden
+    >
+      <div class="error-icon" aria-hidden="true">!</div>
+      <h2>Não foi possível carregar o APOD</h2>
+      <p id="error-message">Ocorreu um erro ao buscar os dados astronômicos.</p>
+      <div class="error-actions">
+        <button type="button" id="retry-btn" class="btn btn-primary">
+          Tentar novamente
+        </button>
+        <button type="button" id="error-today-btn" class="btn btn-secondary">
+          Voltar para Hoje
+        </button>
+      </div>
+    </section>
+
+    <article id="apod-content" class="apod-card" hidden>
+      <header class="apod-header">
+        <div class="apod-meta">
+          <time id="apod-date-display" class="apod-date-badge"></time>
+          <span id="apod-media-badge" class="media-type-badge"></span>
+        </div>
+        <h2 id="apod-title" class="apod-title"></h2>
+      </header>
+
+      <div class="apod-layout">
+        <figure class="apod-media-figure">
+          <div id="apod-media-container" class="apod-media-container"></div>
+          <figcaption id="apod-media-actions" class="apod-media-actions"></figcaption>
+        </figure>
+
+        <section class="apod-details" aria-label="Explicação astronômica">
+          <h3 class="section-heading">Explicação do Astrônomo</h3>
+          <p id="apod-explanation" class="apod-explanation"></p>
+          <p id="apod-copyright" class="apod-copyright" hidden></p>
+        </section>
+      </div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Diário do Cosmos — Dados fornecidos pela API pública
+        <a href="https://api.nasa.gov/" target="_blank" rel="noopener noreferrer">NASA APOD</a>
+        através de proxy backend protegido.
+      </p>
+    </div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
