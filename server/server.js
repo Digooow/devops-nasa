@@ -5,55 +5,58 @@ require('dotenv').config();
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const NASA_API_BASE_URL = 'https://api.nasa.gov/planetary/apod';
+const NASA_APOD_PORTAL_URL = 'https://science.nasa.gov/apod/';
 const FIRST_APOD_DATE = '1995-06-16';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 6000;
 const TODAY_CACHE_TTL_MS = 15 * 60 * 1000;
 
 const FALLBACK_APOD_CATALOG = {
   '2026-11-13': {
-    title: 'NGC 206 in Andromeda',
+    title: 'NGC 206 and the Star Clouds of Andromeda',
     date: '2026-11-13',
     explanation:
-      'The large stellar association cataloged as NGC 206 is nestled within the dusty arms of the neighboring Andromeda galaxy along with the galaxy\'s pinkish star-forming regions. Also known as M31, the spiral galaxy is a mere 2.5 million light-years away. NGC 206 spans about 4,000 light-years, comparable in size to giant stellar nurseries in M33 and the Large Magellanic Cloud.',
+      'The large stellar association cataloged as NGC 206 is nestled within the dusty arms of the neighboring Andromeda galaxy along with the galaxy\'s pinkish star-forming regions. Also known as M31, the spiral galaxy is a mere 2.5 million light-years away. NGC 206 is found at the center of this sharp and detailed close-up of the southwestern extent of Andromeda\'s disk. The bright, blue stars of NGC 206 indicate its youth. In fact, its youngest massive stars are less than 10 million years old. Much larger than the open or galactic clusters of young stars in the disk of our Milky Way galaxy, NGC 206 spans about 4,000 light-years.',
     media_type: 'image',
-    url: 'https://apod.nasa.gov/apod/image/2209/NGC206_Hubble_960.jpg',
-    hdurl: 'https://apod.nasa.gov/apod/image/2209/NGC206_Hubble_3887.jpg',
+    url: 'https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/november/Andromeda_closeupCruz4096.jpg?w=2048&h=1451&fit=clip&crop=faces%2Cfocalpoint',
+    hdurl:
+      'https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2026/november/Andromeda_closeupCruz4096.jpg',
     thumbnail_url: '',
-    copyright: 'NASA, ESA, Hubble; Processing: Robert Gendler',
+    copyright: 'David Cruz',
   },
   '2024-05-01': {
-    title: 'Carina Nebula Jets',
+    title: 'The Fishhead Nebula',
     date: '2024-05-01',
     explanation:
-      'Columns of cosmic dust and gas in the Carina Nebula are sculpted by intense radiation and stellar winds from young massive stars, revealed in fine infrared detail by the James Webb Space Telescope.',
+      'A colorful star forming region known as IC 1795 resembles a fish swimming across the cosmic ocean. Located in the northern constellation Cassiopeia, glowing hydrogen, oxygen, and sulfur gas is sculpted by winds and radiation from massive young stars.',
     media_type: 'image',
-    url: 'https://apod.nasa.gov/apod/image/2405/CarinaJets_JWST_960.jpg',
-    hdurl: 'https://apod.nasa.gov/apod/image/2405/CarinaJets_JWST_2696.jpg',
+    url: 'https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2024/may/FishheadB_Colombari_2704.jpg?w=1538&h=2048&fit=clip&crop=faces%2Cfocalpoint',
+    hdurl:
+      'https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2024/may/FishheadB_Colombari_2704.jpg',
     thumbnail_url: '',
-    copyright: 'NASA, ESA, CSA, STScI',
+    copyright: 'Roberto Colombari',
   },
-  '2024-04-08': {
-    title: 'Total Solar Eclipse over North America',
-    date: '2024-04-08',
+  '2024-04-14': {
+    title: 'How a Total Solar Eclipse Ended',
+    date: '2024-04-14',
     explanation:
-      'During a total solar eclipse, the Moon completely covers the bright solar photosphere, revealing the delicate and dynamic solar corona stretching across the darkened daytime sky.',
+      'How does a total solar eclipse end? In the first few seconds of transition as the Moon moves away from covering the Sun, light streams between lunar mountains to create the iconic diamond ring and Bailey\'s beads.',
     media_type: 'video',
-    url: 'https://www.youtube.com/embed/2MJY_ptQW1o',
+    url: 'https://www.youtube.com/embed/w5uUcq__vMo',
     hdurl: '',
-    thumbnail_url: 'https://img.youtube.com/vi/2MJY_ptQW1o/hqdefault.jpg',
-    copyright: 'NASA',
+    thumbnail_url: 'https://img.youtube.com/vi/w5uUcq__vMo/hqdefault.jpg',
+    copyright: 'David Duarte',
   },
-  '2023-07-12': {
-    title: 'Rho Ophiuchi Cloud Complex from Webb',
-    date: '2023-07-12',
+  '2005-05-31': {
+    title: 'The Trifid Nebula from CFHT',
+    date: '2005-05-31',
     explanation:
-      'Captured by the James Webb Space Telescope, the Rho Ophiuchi star-forming region lies about 390 light-years away and showcases dramatic jets from newborn stars carving through glowing interstellar dust.',
+      'Unspeakable beauty and unimaginable bedlam can be found together in the Trifid Nebula (M20), a dramatic star-forming region of glowing red hydrogen, dusty dark lanes, and blue reflection nebulae imaged by the Canada-France-Hawaii Telescope.',
     media_type: 'image',
-    url: 'https://apod.nasa.gov/apod/image/2307/RhoOph_Webb_960.jpg',
-    hdurl: 'https://apod.nasa.gov/apod/image/2307/RhoOph_Webb_4096.jpg',
+    url: 'https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2005/may/m20_cfht_big.jpg',
+    hdurl: 'https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2005/may/m20_cfht_big.jpg',
     thumbnail_url: '',
-    copyright: 'NASA, ESA, CSA, STScI',
+    copyright: 'Jean-Charles Cuillandre (CFHT)',
   },
 };
 
@@ -214,24 +217,153 @@ function cacheApodResult(dateValue, sanitized) {
 
 function activateFallback(dateValue) {
   const targetDate = dateValue || getCurrentEasternDate();
+  const keyNote = getNasaApiKey() === 'DEMO_KEY' ? ' (DEMO_KEY)' : '';
   console.warn(
-    '[APOD] API externa indisponível ou em rate-limit (DEMO_KEY); utilizando registro de contingência para',
-    targetDate
+    `[APOD] Servidores externos da NASA indisponíveis${keyNote}; utilizando registro de contingência para ${targetDate}`
   );
   const fallback = getFallbackApod(dateValue);
   cacheApodResult(dateValue, fallback);
   return fallback;
 }
 
-async function requestNasaApod(params) {
+function decodeHtmlEntities(input) {
+  if (typeof input !== 'string' || !input) {
+    return '';
+  }
+
+  const namedEntities = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&#039;': "'",
+    '&apos;': "'",
+    '&nbsp;': ' ',
+  };
+
+  return input
+    .replace(/&(amp|lt|gt|quot|apos|nbsp);|&#0?39;/g, (match) => namedEntities[match] || match)
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)));
+}
+
+function stripHtmlTags(htmlFragment) {
+  return decodeHtmlEntities(
+    htmlFragment
+      .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function toShortApodDate(isoDate) {
+  return isoDate.slice(2, 4) + isoDate.slice(5, 7) + isoDate.slice(8, 10);
+}
+
+function extractApodFromScienceHtml(html, targetDate) {
+  if (typeof html !== 'string' || !html) {
+    return null;
+  }
+
+  const lastHeroIdx = html.lastIndexOf('media-detail-hero__media');
+  if (lastHeroIdx === -1) {
+    return null;
+  }
+
+  const sectionSlice = html.slice(lastHeroIdx, lastHeroIdx + 20000);
+  const titleMatch = sectionSlice.match(
+    /<h[12][^>]*class="[^"]*display-48[^"]*"[^>]*>([\s\S]*?)<\/h[12]>/i
+  );
+
+  if (!titleMatch) {
+    return null;
+  }
+
+  const mediaBlock = sectionSlice.slice(0, titleMatch.index);
+  const title = stripHtmlTags(titleMatch[1]);
+  if (!title) {
+    return null;
+  }
+
+  let mediaType = 'other';
+  let url = '';
+  let hdurl = '';
+  let thumbnailUrl = '';
+
+  const iframeMatch = mediaBlock.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+  const videoSourceMatch =
+    mediaBlock.match(/<video[\s\S]*?<source[^>]+src=["']([^"']+)["']/i) ||
+    mediaBlock.match(/<video[^>]+src=["']([^"']+)["']/i);
+  const imgMatch = mediaBlock.match(/<img[^>]+src=["']([^"']+)["']/i);
+
+  if (iframeMatch) {
+    mediaType = 'video';
+    url = decodeHtmlEntities(iframeMatch[1]).trim();
+    const ytMatch = url.match(/youtube\.com\/embed\/([^?&"/]+)/i);
+    if (ytMatch) {
+      thumbnailUrl = `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+    }
+  } else if (videoSourceMatch) {
+    mediaType = 'video';
+    url = decodeHtmlEntities(videoSourceMatch[1]).trim();
+  } else if (imgMatch) {
+    mediaType = 'image';
+    url = decodeHtmlEntities(imgMatch[1]).trim();
+    const anchorMatch = mediaBlock.match(/<a[^>]+href=["']([^"']+)["']/i);
+    if (anchorMatch) {
+      const candidateHd = decodeHtmlEntities(anchorMatch[1]).trim();
+      if (
+        /\.(jpe?g|png|gif|webp)(\?.*)?$/i.test(candidateHd) ||
+        candidateHd.includes('assets.science.nasa.gov')
+      ) {
+        hdurl = candidateHd;
+      }
+    }
+    if (!hdurl) {
+      hdurl = url.split('?')[0];
+    }
+  } else {
+    return null;
+  }
+
+  const explanationMatch = sectionSlice.match(
+    /<p[^>]*class="[^"]*media-detail-hero__description[^"]*"[^>]*>([\s\S]*?)<\/p>/i
+  );
+  let explanation = explanationMatch ? stripHtmlTags(explanationMatch[1]) : '';
+  explanation = explanation
+    .replace(/^Explanation:\s*/i, '')
+    .replace(/\s*Tomorrow's picture:[\s\S]*$/i, '')
+    .trim();
+
+  const creditMatch = sectionSlice.match(
+    /<th[^>]*>\s*Credit[^<]*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i
+  );
+  const copyright = creditMatch ? stripHtmlTags(creditMatch[1]) : '';
+
+  return sanitizeApodPayload({
+    title,
+    date: targetDate,
+    explanation: explanation || 'Explicação não fornecida pela NASA para esta data.',
+    media_type: mediaType,
+    url,
+    hdurl,
+    thumbnail_url: thumbnailUrl,
+    copyright,
+  });
+}
+
+async function fetchWithTimeout(targetUrl, acceptHeader) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    return await fetch(`${NASA_API_BASE_URL}?${params.toString()}`, {
+    return await fetch(targetUrl, {
       signal: controller.signal,
       headers: {
-        Accept: 'application/json',
+        Accept: acceptHeader,
+        'User-Agent': 'DiarioDoCosmos/1.0 (+https://api.nasa.gov/)',
       },
     });
   } finally {
@@ -239,7 +371,22 @@ async function requestNasaApod(params) {
   }
 }
 
-async function fetchApodFromNasa(dateValue) {
+async function fetchApodFromScienceNasaPage(dateValue) {
+  const targetDate = dateValue || getCurrentEasternDate();
+  const portalUrl = dateValue
+    ? `${NASA_APOD_PORTAL_URL}?date=${toShortApodDate(targetDate)}`
+    : NASA_APOD_PORTAL_URL;
+
+  const response = await fetchWithTimeout(portalUrl, 'text/html,application/xhtml+xml');
+  if (!response.ok) {
+    return null;
+  }
+
+  const html = await response.text();
+  return extractApodFromScienceHtml(html, targetDate);
+}
+
+async function fetchOfficialNasaApi(dateValue) {
   const apiKey = getNasaApiKey();
   const params = new URLSearchParams({
     api_key: apiKey,
@@ -250,47 +397,78 @@ async function fetchApodFromNasa(dateValue) {
     params.set('date', dateValue);
   }
 
-  try {
-    let response = await requestNasaApod(params);
+  let response = await fetchWithTimeout(
+    `${NASA_API_BASE_URL}?${params.toString()}`,
+    'application/json'
+  );
 
-    if (response.status >= 500) {
-      const retryParams = new URLSearchParams({ api_key: apiKey });
-      if (dateValue) {
-        retryParams.set('date', dateValue);
-      }
-      response = await requestNasaApod(retryParams);
+  if (response.status >= 500) {
+    const retryParams = new URLSearchParams({ api_key: apiKey });
+    if (dateValue) {
+      retryParams.set('date', dateValue);
     }
-
-    if (!response.ok) {
-      if (response.status === 429 || response.status >= 500) {
-        return activateFallback(dateValue);
-      }
-
-      const mapped = mapUpstreamError(response.status);
-      const error = new Error(mapped.message);
-      error.statusCode = mapped.status;
-      throw error;
-    }
-
-    const rawData = await response.json();
-    const sanitized = sanitizeApodPayload(rawData);
-
-    const isGenericLogoPlaceholder =
-      sanitized.url && sanitized.url.includes('nasa-logo@2x.png');
-
-    if (isGenericLogoPlaceholder) {
-      return activateFallback(dateValue);
-    }
-
-    cacheApodResult(dateValue, sanitized);
-    return sanitized;
-  } catch (error) {
-    if (error.statusCode) {
-      throw error;
-    }
-
-    return activateFallback(dateValue);
+    response = await fetchWithTimeout(
+      `${NASA_API_BASE_URL}?${retryParams.toString()}`,
+      'application/json'
+    );
   }
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      const mapped = mapUpstreamError(403);
+      const authError = new Error(mapped.message);
+      authError.statusCode = mapped.status;
+      throw authError;
+    }
+
+    return { ok: false, status: response.status, data: null };
+  }
+
+  const rawData = await response.json();
+  return { ok: true, status: response.status, data: sanitizeApodPayload(rawData) };
+}
+
+function isBrokenApiPlaceholder(payload) {
+  if (!payload) {
+    return true;
+  }
+
+  const hasBrokenLogo = Boolean(payload.url && payload.url.includes('nasa-logo@2x.png'));
+  const hasGenericTitle = payload.title === 'NASA Science';
+  return hasBrokenLogo || hasGenericTitle || !payload.url;
+}
+
+async function fetchApodFromNasa(dateValue) {
+  const [officialOutcome, portalOutcome] = await Promise.allSettled([
+    fetchOfficialNasaApi(dateValue),
+    fetchApodFromScienceNasaPage(dateValue),
+  ]);
+
+  if (officialOutcome.status === 'rejected' && officialOutcome.reason?.statusCode === 502) {
+    throw officialOutcome.reason;
+  }
+
+  const officialResult = officialOutcome.status === 'fulfilled' ? officialOutcome.value : null;
+  const portalData = portalOutcome.status === 'fulfilled' ? portalOutcome.value : null;
+
+  if (officialResult && officialResult.ok && !isBrokenApiPlaceholder(officialResult.data)) {
+    cacheApodResult(dateValue, officialResult.data);
+    return officialResult.data;
+  }
+
+  if (portalData && portalData.url) {
+    cacheApodResult(dateValue, portalData);
+    return portalData;
+  }
+
+  if (officialResult && !officialResult.ok && (officialResult.status === 400 || officialResult.status === 404)) {
+    const mapped = mapUpstreamError(officialResult.status);
+    const notFoundError = new Error(mapped.message);
+    notFoundError.statusCode = mapped.status;
+    throw notFoundError;
+  }
+
+  return activateFallback(dateValue);
 }
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
