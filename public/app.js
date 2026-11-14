@@ -411,12 +411,6 @@ function registerEventListeners() {
     handleDateSelection(elements.dateInput.value);
   });
 
-  elements.dateInput.addEventListener('change', () => {
-    if (elements.dateInput.value && elements.dateInput.value !== appState.currentDate) {
-      handleDateSelection(elements.dateInput.value);
-    }
-  });
-
   elements.prevDayBtn.addEventListener('click', () => {
     if (!appState.currentDate) {
       return;
