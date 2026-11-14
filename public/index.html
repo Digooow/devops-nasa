@@ -11,10 +11,10 @@
   <header class="site-header">
     <div class="container header-inner">
       <div class="brand">
-        <span class="brand-badge">NASA APOD API</span>
+        <span class="brand-badge">NASA APOD</span>
         <h1>Diário do Cosmos</h1>
-        <p class="subtitle">Explore diariamente o universo através das imagens, vídeos e explicações astronômicas da NASA.</p>
       </div>
+      <p class="subtitle">Arquivo astronômico oficial desde 16/06/1995</p>
     </div>
   </header>
 
@@ -22,7 +22,7 @@
     <section class="controls-panel" aria-label="Seleção de data do APOD">
       <form id="date-form" class="date-form">
         <div class="date-input-group">
-          <label for="apod-date" class="control-label">Escolher data</label>
+          <label for="apod-date" class="control-label sr-only">Escolher data</label>
           <div class="input-action-row">
             <input
               type="date"
@@ -35,22 +35,35 @@
               Ver data
             </button>
           </div>
-          <small id="date-help" class="control-help">Arquivo disponível desde 16/06/1995.</small>
+          <small id="date-help" class="control-help">Escolha qualquer data a partir de 16/06/1995.</small>
         </div>
 
         <fieldset class="nav-buttons">
           <legend class="sr-only">Navegação rápida entre datas</legend>
           <button type="button" id="prev-day-btn" class="btn btn-secondary">
-            ◀ Dia Anterior
+            <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 18-6-6 6-6"></path>
+            </svg>
+            <span>Dia Anterior</span>
           </button>
           <button type="button" id="today-btn" class="btn btn-secondary">
             Hoje
           </button>
           <button type="button" id="next-day-btn" class="btn btn-secondary">
-            Próximo Dia ▶
+            <span>Próximo Dia</span>
+            <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m9 18 6-6-6-6"></path>
+            </svg>
           </button>
           <button type="button" id="random-day-btn" class="btn btn-ghost">
-            Data Aleatória
+            <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M16 3h5v5"></path>
+              <path d="M4 20 21 3"></path>
+              <path d="M21 16v5h-5"></path>
+              <path d="M15 15 21 21"></path>
+              <path d="M4 4 9 9"></path>
+            </svg>
+            <span>Data Aleatória</span>
           </button>
         </fieldset>
       </form>
@@ -87,25 +100,29 @@
     </div>
 
     <article id="apod-content" class="apod-card" hidden>
-      <header class="apod-header">
-        <div class="apod-meta">
-          <time id="apod-date-display" class="apod-date-badge"></time>
-          <span id="apod-media-badge" class="media-type-badge"></span>
-        </div>
-        <h2 id="apod-title" class="apod-title">Registro Astronômico do Dia</h2>
-      </header>
-
       <div class="apod-layout">
         <figure class="apod-media-figure">
           <div id="apod-media-container" class="apod-media-container"></div>
-          <figcaption id="apod-media-actions" class="apod-media-actions"></figcaption>
+          <figcaption id="apod-copyright" class="apod-copyright" hidden></figcaption>
         </figure>
 
-        <section class="apod-details" aria-label="Explicação astronômica">
-          <h3 class="section-heading">Explicação do Astrônomo</h3>
-          <p id="apod-explanation" class="apod-explanation"></p>
-          <p id="apod-copyright" class="apod-copyright" hidden></p>
-        </section>
+        <div class="apod-editorial-col">
+          <header class="apod-header">
+            <div class="apod-meta">
+              <time id="apod-date-display" class="apod-date-badge"></time>
+              <span class="meta-separator" aria-hidden="true">•</span>
+              <span id="apod-media-badge" class="media-type-badge"></span>
+            </div>
+            <h2 id="apod-title" class="apod-title">Registro Astronômico do Dia</h2>
+          </header>
+
+          <section class="apod-details" aria-label="Explicação astronômica">
+            <h3 class="section-heading sr-only">Explicação do Astrônomo</h3>
+            <p id="apod-explanation" class="apod-explanation"></p>
+          </section>
+
+          <div id="apod-media-actions" class="apod-media-actions"></div>
+        </div>
       </div>
     </article>
   </main>
