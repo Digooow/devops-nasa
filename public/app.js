@@ -112,7 +112,7 @@ function normalizeYouTubeUrl(parsed, host) {
 
 function normalizeVimeoUrl(parsed, host) {
   if (host === 'vimeo.com') {
-    const videoId = parsed.pathname.split('/').filter(Boolean)[0];
+    const videoId = parsed.pathname.split('/').find(Boolean);
     return videoId && /^\d+$/.test(videoId) ? `https://player.vimeo.com/video/${videoId}` : null;
   }
 
@@ -409,6 +409,12 @@ async function fetchApod(dateStr = null) {
   }
 }
 
+function loadApod(dateStr = null) {
+  fetchApod(dateStr).catch((error) => {
+    showError(error?.message);
+  });
+}
+
 function handleDateSelection(selectedDate) {
   if (!selectedDate) {
     showError('Por favor, selecione uma data válida.');
@@ -425,7 +431,7 @@ function handleDateSelection(selectedDate) {
     return;
   }
 
-  fetchApod(selectedDate);
+  loadApod(selectedDate);
 }
 
 function registerEventListeners() {
@@ -440,7 +446,7 @@ function registerEventListeners() {
     }
     const previousDate = shiftIsoDate(appState.currentDate, -1);
     if (previousDate >= FIRST_APOD_DATE) {
-      fetchApod(previousDate);
+      loadApod(previousDate);
     }
   });
 
@@ -450,30 +456,30 @@ function registerEventListeners() {
     }
     const nextDate = shiftIsoDate(appState.currentDate, 1);
     if (nextDate <= appState.maxDate) {
-      fetchApod(nextDate);
+      loadApod(nextDate);
     }
   });
 
   elements.todayBtn.addEventListener('click', () => {
-    fetchApod(null);
+    loadApod(null);
   });
 
   elements.errorTodayBtn.addEventListener('click', () => {
-    fetchApod(null);
+    loadApod(null);
   });
 
   elements.randomDayBtn.addEventListener('click', () => {
     const limitDate = appState.maxDate ?? new Date().toISOString().slice(0, 10);
     const randomDate = getRandomApodDate(limitDate);
-    fetchApod(randomDate);
+    loadApod(randomDate);
   });
 
   elements.retryBtn.addEventListener('click', () => {
-    fetchApod(appState.lastRequestedDate);
+    loadApod(appState.lastRequestedDate);
   });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   registerEventListeners();
-  fetchApod(null);
+  loadApod(null);
 });
