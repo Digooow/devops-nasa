@@ -1,5 +1,6 @@
 const FIRST_APOD_DATE = '1995-06-16';
-const DIRECT_VIDEO_EXTENSIONS = /\.(mp4|webm|ogg)(\?.*)?$/i;
+const DIRECT_VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogg'];
+const YOUTUBE_EMBED_BASE = 'https://www.youtube.com/embed/';
 
 const elements = {
   dateForm: document.getElementById('date-form'),
@@ -83,36 +84,36 @@ function getRandomApodDate(maxDateStr) {
   return shiftIsoDate(FIRST_APOD_DATE, randomOffset);
 }
 
-function normalizeEmbedVideoUrl(rawUrl) {
-  if (!isSafeHttpUrl(rawUrl)) {
-    return null;
+function isDirectVideoUrl(rawUrl) {
+  try {
+    const pathname = new URL(rawUrl).pathname.toLowerCase();
+    return DIRECT_VIDEO_EXTENSIONS.some((ext) => pathname.endsWith(ext));
+  } catch {
+    return false;
   }
+}
 
-  const parsed = new URL(rawUrl.trim());
-  const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
-
+function normalizeYouTubeUrl(parsed, host) {
   if (host === 'youtube.com' || host === 'm.youtube.com') {
     if (parsed.pathname.startsWith('/embed/')) {
       return parsed.toString();
     }
     const videoId = parsed.searchParams.get('v');
-    if (videoId) {
-      return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`;
-    }
+    return videoId ? `${YOUTUBE_EMBED_BASE}${encodeURIComponent(videoId)}` : null;
   }
 
   if (host === 'youtu.be') {
     const videoId = parsed.pathname.slice(1).split('/')[0];
-    if (videoId) {
-      return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`;
-    }
+    return videoId ? `${YOUTUBE_EMBED_BASE}${encodeURIComponent(videoId)}` : null;
   }
 
+  return null;
+}
+
+function normalizeVimeoUrl(parsed, host) {
   if (host === 'vimeo.com') {
     const videoId = parsed.pathname.split('/').filter(Boolean)[0];
-    if (videoId && /^\d+$/.test(videoId)) {
-      return `https://player.vimeo.com/video/${videoId}`;
-    }
+    return videoId && /^\d+$/.test(videoId) ? `https://player.vimeo.com/video/${videoId}` : null;
   }
 
   if (host === 'player.vimeo.com' && parsed.pathname.startsWith('/video/')) {
@@ -120,6 +121,16 @@ function normalizeEmbedVideoUrl(rawUrl) {
   }
 
   return null;
+}
+
+function normalizeEmbedVideoUrl(rawUrl) {
+  if (!isSafeHttpUrl(rawUrl)) {
+    return null;
+  }
+
+  const parsed = new URL(rawUrl.trim());
+  const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+  return normalizeYouTubeUrl(parsed, host) ?? normalizeVimeoUrl(parsed, host);
 }
 
 function createExternalLinkButton(href, label, variantClass = 'btn-secondary') {
@@ -206,6 +217,96 @@ function getMediaBadgeLabel(mediaType) {
   return 'Mídia Especial';
 }
 
+function renderImageMedia(mediaUrl, hdUrl, title) {
+  const img = document.createElement('img');
+  img.src = mediaUrl;
+  img.alt = title || 'Imagem astronômica do dia da NASA';
+  img.className = 'apod-image';
+
+  img.addEventListener('error', () => {
+    elements.apodMediaContainer.replaceChildren(
+      createFallbackBox(
+        'Não foi possível renderizar esta imagem diretamente no navegador.',
+        '',
+        hdUrl || mediaUrl,
+        'Abrir imagem original'
+      )
+    );
+  });
+
+  elements.apodMediaContainer.appendChild(img);
+
+  const actionUrl = hdUrl || mediaUrl;
+  const actionLabel = hdUrl
+    ? 'Abrir imagem em Alta Definição (HD)'
+    : 'Abrir imagem original';
+  elements.apodMediaActions.appendChild(createExternalLinkButton(actionUrl, actionLabel));
+}
+
+function renderDirectVideo(mediaUrl, thumbnailUrl) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'video-wrapper';
+
+  const video = document.createElement('video');
+  video.controls = true;
+  video.playsInline = true;
+  video.preload = 'metadata';
+  video.src = mediaUrl;
+  if (thumbnailUrl) {
+    video.poster = thumbnailUrl;
+  }
+
+  wrapper.appendChild(video);
+  elements.apodMediaContainer.appendChild(wrapper);
+  elements.apodMediaActions.appendChild(
+    createExternalLinkButton(mediaUrl, 'Abrir arquivo de vídeo')
+  );
+}
+
+function renderEmbedVideo(embedUrl, mediaUrl, title) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'video-wrapper';
+
+  const iframe = document.createElement('iframe');
+  iframe.src = embedUrl;
+  iframe.title = title || 'Vídeo astronômico do dia da NASA';
+  iframe.loading = 'lazy';
+  iframe.allowFullscreen = true;
+  iframe.setAttribute(
+    'allow',
+    'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
+  );
+  iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+
+  wrapper.appendChild(iframe);
+  elements.apodMediaContainer.appendChild(wrapper);
+  elements.apodMediaActions.appendChild(
+    createExternalLinkButton(mediaUrl, 'Assistir na fonte original')
+  );
+}
+
+function renderVideoMedia(mediaUrl, thumbnailUrl, title) {
+  if (isDirectVideoUrl(mediaUrl)) {
+    renderDirectVideo(mediaUrl, thumbnailUrl);
+    return;
+  }
+
+  const embedUrl = normalizeEmbedVideoUrl(mediaUrl);
+  if (embedUrl) {
+    renderEmbedVideo(embedUrl, mediaUrl, title);
+    return;
+  }
+
+  elements.apodMediaContainer.appendChild(
+    createFallbackBox(
+      'Este vídeo é hospedado em um player externo que não permite incorporação direta.',
+      thumbnailUrl,
+      mediaUrl,
+      'Assistir vídeo em nova aba'
+    )
+  );
+}
+
 function renderMedia(data) {
   elements.apodMediaContainer.replaceChildren();
   elements.apodMediaActions.replaceChildren();
@@ -215,90 +316,12 @@ function renderMedia(data) {
   const thumbnailUrl = isSafeHttpUrl(data.thumbnail_url) ? data.thumbnail_url.trim() : '';
 
   if (data.media_type === 'image' && mediaUrl) {
-    const img = document.createElement('img');
-    img.src = mediaUrl;
-    img.alt = data.title || 'Imagem astronômica do dia da NASA';
-    img.className = 'apod-image';
-
-    img.addEventListener('error', () => {
-      elements.apodMediaContainer.replaceChildren(
-        createFallbackBox(
-          'Não foi possível renderizar esta imagem diretamente no navegador.',
-          '',
-          hdUrl || mediaUrl,
-          'Abrir imagem original'
-        )
-      );
-    });
-
-    elements.apodMediaContainer.appendChild(img);
-
-    if (hdUrl) {
-      elements.apodMediaActions.appendChild(
-        createExternalLinkButton(hdUrl, 'Abrir imagem em Alta Definição (HD)')
-      );
-    } else {
-      elements.apodMediaActions.appendChild(
-        createExternalLinkButton(mediaUrl, 'Abrir imagem original')
-      );
-    }
+    renderImageMedia(mediaUrl, hdUrl, data.title);
     return;
   }
 
   if (data.media_type === 'video' && mediaUrl) {
-    if (DIRECT_VIDEO_EXTENSIONS.test(mediaUrl)) {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'video-wrapper';
-
-      const video = document.createElement('video');
-      video.controls = true;
-      video.playsInline = true;
-      video.preload = 'metadata';
-      video.src = mediaUrl;
-      if (thumbnailUrl) {
-        video.poster = thumbnailUrl;
-      }
-
-      wrapper.appendChild(video);
-      elements.apodMediaContainer.appendChild(wrapper);
-      elements.apodMediaActions.appendChild(
-        createExternalLinkButton(mediaUrl, 'Abrir arquivo de vídeo')
-      );
-      return;
-    }
-
-    const embedUrl = normalizeEmbedVideoUrl(mediaUrl);
-    if (embedUrl) {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'video-wrapper';
-
-      const iframe = document.createElement('iframe');
-      iframe.src = embedUrl;
-      iframe.title = data.title || 'Vídeo astronômico do dia da NASA';
-      iframe.loading = 'lazy';
-      iframe.allowFullscreen = true;
-      iframe.setAttribute(
-        'allow',
-        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
-      );
-      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-
-      wrapper.appendChild(iframe);
-      elements.apodMediaContainer.appendChild(wrapper);
-      elements.apodMediaActions.appendChild(
-        createExternalLinkButton(mediaUrl, 'Assistir na fonte original')
-      );
-      return;
-    }
-
-    elements.apodMediaContainer.appendChild(
-      createFallbackBox(
-        'Este vídeo é hospedado em um player externo que não permite incorporação direta.',
-        thumbnailUrl,
-        mediaUrl,
-        'Assistir vídeo em nova aba'
-      )
-    );
+    renderVideoMedia(mediaUrl, thumbnailUrl, data.title);
     return;
   }
 
@@ -365,7 +388,7 @@ async function fetchApod(dateStr = null) {
 
     if (!response.ok) {
       const serverError =
-        payload && typeof payload.error === 'string'
+        typeof payload?.error === 'string'
           ? payload.error
           : `Erro ao consultar o servidor (HTTP ${response.status}).`;
       throw new Error(serverError);
@@ -440,7 +463,7 @@ function registerEventListeners() {
   });
 
   elements.randomDayBtn.addEventListener('click', () => {
-    const limitDate = appState.maxDate || new Date().toISOString().slice(0, 10);
+    const limitDate = appState.maxDate ?? new Date().toISOString().slice(0, 10);
     const randomDate = getRandomApodDate(limitDate);
     fetchApod(randomDate);
   });

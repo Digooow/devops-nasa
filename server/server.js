@@ -3,13 +3,17 @@ const express = require('express');
 require('dotenv').config();
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+app.disable('x-powered-by');
+
+const parsedPort = Number.parseInt(process.env.PORT ?? '', 10);
+const PORT = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 3000;
 const NASA_API_BASE_URL = 'https://api.nasa.gov/planetary/apod';
 const NASA_APOD_PORTAL_URL = 'https://science.nasa.gov/apod/';
 const FIRST_APOD_DATE = '1995-06-16';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const REQUEST_TIMEOUT_MS = 6000;
 const TODAY_CACHE_TTL_MS = 15 * 60 * 1000;
+const IMAGE_FILE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 
 const FALLBACK_APOD_CATALOG = {
   '2026-11-13': {
@@ -69,11 +73,8 @@ let latestTodayCache = {
 };
 
 function getNasaApiKey() {
-  const configuredKey = process.env.NASA_API_KEY && process.env.NASA_API_KEY.trim();
-  if (!configuredKey) {
-    return 'DEMO_KEY';
-  }
-  return configuredKey;
+  const configuredKey = process.env.NASA_API_KEY?.trim();
+  return configuredKey || 'DEMO_KEY';
 }
 
 function getCurrentEasternDate() {
@@ -120,10 +121,12 @@ function validateDateParam(rawDate) {
     };
   }
 
+  const currentEasternDate = getCurrentEasternDate();
+  const cachedTodayDate = latestTodayCache.data?.date;
   const maxAllowedDate =
-    latestTodayCache.data && latestTodayCache.data.date > getCurrentEasternDate()
-      ? latestTodayCache.data.date
-      : getCurrentEasternDate();
+    cachedTodayDate && cachedTodayDate > currentEasternDate
+      ? cachedTodayDate
+      : currentEasternDate;
 
   if (normalizedDate > maxAllowedDate) {
     return {
@@ -183,7 +186,7 @@ function mapUpstreamError(statusCode) {
 function getFallbackApod(dateValue) {
   const targetDate = dateValue || getCurrentEasternDate();
 
-  if (Object.prototype.hasOwnProperty.call(FALLBACK_APOD_CATALOG, targetDate)) {
+  if (Object.hasOwn(FALLBACK_APOD_CATALOG, targetDate)) {
     return {
       ...FALLBACK_APOD_CATALOG[targetDate],
       date: targetDate,
@@ -191,8 +194,8 @@ function getFallbackApod(dateValue) {
   }
 
   let charSum = 0;
-  for (let i = 0; i < targetDate.length; i += 1) {
-    charSum += targetDate.charCodeAt(i);
+  for (const ch of targetDate) {
+    charSum += ch.codePointAt(0) ?? 0;
   }
 
   const chosen = FALLBACK_APOD_LIST[charSum % FALLBACK_APOD_LIST.length];
@@ -226,6 +229,13 @@ function activateFallback(dateValue) {
   return fallback;
 }
 
+function safeFromCodePoint(codePoint, fallback) {
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
+    return fallback;
+  }
+  return String.fromCodePoint(codePoint);
+}
+
 function decodeHtmlEntities(input) {
   if (typeof input !== 'string' || !input) {
     return '';
@@ -242,24 +252,298 @@ function decodeHtmlEntities(input) {
     '&nbsp;': ' ',
   };
 
-  return input
-    .replace(/&(amp|lt|gt|quot|apos|nbsp);|&#0?39;/g, (match) => namedEntities[match] || match)
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)));
+  let decoded = input;
+  for (const [entity, replacement] of Object.entries(namedEntities)) {
+    decoded = decoded.replaceAll(entity, replacement);
+  }
+
+  return decoded
+    .replace(/&#(\d{1,7});/g, (match, dec) => safeFromCodePoint(Number(dec), match))
+    .replace(/&#x([0-9a-fA-F]{1,6});/g, (match, hex) =>
+      safeFromCodePoint(Number.parseInt(hex, 16), match)
+    );
 }
 
 function stripHtmlTags(htmlFragment) {
-  return decodeHtmlEntities(
-    htmlFragment
-      .replace(/<br\s*\/?>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-  )
-    .replace(/\s+/g, ' ')
-    .trim();
+  if (typeof htmlFragment !== 'string' || !htmlFragment) {
+    return '';
+  }
+
+  const parts = [];
+  let cursor = 0;
+
+  while (cursor < htmlFragment.length) {
+    const openIdx = htmlFragment.indexOf('<', cursor);
+    if (openIdx === -1) {
+      parts.push(htmlFragment.slice(cursor));
+      break;
+    }
+
+    if (openIdx > cursor) {
+      parts.push(htmlFragment.slice(cursor, openIdx));
+    }
+
+    const closeIdx = htmlFragment.indexOf('>', openIdx + 1);
+    if (closeIdx === -1) {
+      parts.push(htmlFragment.slice(openIdx));
+      break;
+    }
+
+    parts.push(' ');
+    cursor = closeIdx + 1;
+  }
+
+  return decodeHtmlEntities(parts.join('')).replace(/\s+/g, ' ').trim();
 }
 
 function toShortApodDate(isoDate) {
   return isoDate.slice(2, 4) + isoDate.slice(5, 7) + isoDate.slice(8, 10);
+}
+
+function isTagNameBoundary(ch) {
+  return ch === '>' || ch === '/' || ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
+}
+
+function findTagEnd(html, openTagStart) {
+  let activeQuote = '';
+
+  for (let i = openTagStart + 1; i < html.length; i += 1) {
+    const ch = html[i];
+    if (activeQuote) {
+      if (ch === activeQuote) {
+        activeQuote = '';
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      activeQuote = ch;
+    } else if (ch === '>') {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+function findNextTag(html, lowerHtml, tagName, fromIndex = 0) {
+  const needle = `<${tagName.toLowerCase()}`;
+  let searchPos = fromIndex;
+
+  while (searchPos < lowerHtml.length) {
+    const idx = lowerHtml.indexOf(needle, searchPos);
+    if (idx === -1) {
+      return null;
+    }
+
+    const boundaryChar = lowerHtml[idx + needle.length] ?? '';
+    if (!isTagNameBoundary(boundaryChar)) {
+      searchPos = idx + needle.length;
+      continue;
+    }
+
+    const endIdx = findTagEnd(html, idx);
+    if (endIdx === -1) {
+      return null;
+    }
+
+    return {
+      start: idx,
+      end: endIdx + 1,
+      tagText: html.slice(idx, endIdx + 1),
+    };
+  }
+
+  return null;
+}
+
+function extractAttribute(tagText, attrName) {
+  const lowerTag = tagText.toLowerCase();
+  const attrNeedle = `${attrName.toLowerCase()}=`;
+  let searchPos = 0;
+
+  while (searchPos < lowerTag.length) {
+    const idx = lowerTag.indexOf(attrNeedle, searchPos);
+    if (idx === -1) {
+      return '';
+    }
+
+    const prevChar = lowerTag[idx - 1] ?? '';
+    if (!/[\s"']/.test(prevChar)) {
+      searchPos = idx + attrNeedle.length;
+      continue;
+    }
+
+    const valueStart = idx + attrNeedle.length;
+    const quote = tagText[valueStart];
+    if (quote !== '"' && quote !== "'") {
+      searchPos = valueStart;
+      continue;
+    }
+
+    const valueEnd = tagText.indexOf(quote, valueStart + 1);
+    if (valueEnd === -1) {
+      return '';
+    }
+
+    return decodeHtmlEntities(tagText.slice(valueStart + 1, valueEnd)).trim();
+  }
+
+  return '';
+}
+
+function extractElementByClass(html, lowerHtml, tagNames, classNeedle) {
+  for (const tagName of tagNames) {
+    let cursor = 0;
+
+    while (cursor < lowerHtml.length) {
+      const tag = findNextTag(html, lowerHtml, tagName, cursor);
+      if (!tag) {
+        break;
+      }
+
+      const classAttr = extractAttribute(tag.tagText, 'class');
+      if (classAttr.includes(classNeedle)) {
+        const closeTag = `</${tagName}>`;
+        const closeIdx = lowerHtml.indexOf(closeTag, tag.end);
+        if (closeIdx === -1) {
+          break;
+        }
+        return {
+          index: tag.start,
+          innerHtml: html.slice(tag.end, closeIdx),
+        };
+      }
+
+      cursor = tag.end;
+    }
+  }
+
+  return null;
+}
+
+function isImageFileUrl(candidate) {
+  const pathOnly = candidate.split('?')[0].toLowerCase();
+  return IMAGE_FILE_EXTENSIONS.some((ext) => pathOnly.endsWith(ext));
+}
+
+function extractYouTubeEmbedId(embedUrl) {
+  try {
+    const parsed = new URL(embedUrl);
+    if (parsed.pathname.startsWith('/embed/')) {
+      return parsed.pathname.split('/')[2] ?? '';
+    }
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+function extractHeroMedia(mediaBlock) {
+  const lowerMedia = mediaBlock.toLowerCase();
+  const iframeTag = findNextTag(mediaBlock, lowerMedia, 'iframe');
+
+  if (iframeTag) {
+    const url = extractAttribute(iframeTag.tagText, 'src');
+    if (!url) {
+      return null;
+    }
+    const ytId = extractYouTubeEmbedId(url);
+    return {
+      mediaType: 'video',
+      url,
+      hdurl: '',
+      thumbnailUrl: ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : '',
+    };
+  }
+
+  const videoTag = findNextTag(mediaBlock, lowerMedia, 'video');
+  if (videoTag) {
+    const sourceTag = findNextTag(mediaBlock, lowerMedia, 'source', videoTag.end);
+    const url =
+      extractAttribute(sourceTag?.tagText ?? '', 'src') || extractAttribute(videoTag.tagText, 'src');
+    if (!url) {
+      return null;
+    }
+    return { mediaType: 'video', url, hdurl: '', thumbnailUrl: '' };
+  }
+
+  const imgTag = findNextTag(mediaBlock, lowerMedia, 'img');
+  if (!imgTag) {
+    return null;
+  }
+
+  const url = extractAttribute(imgTag.tagText, 'src');
+  if (!url) {
+    return null;
+  }
+
+  const anchorTag = findNextTag(mediaBlock, lowerMedia, 'a');
+  const candidateHd = anchorTag ? extractAttribute(anchorTag.tagText, 'href') : '';
+  const hasValidHdLink =
+    Boolean(candidateHd) &&
+    (isImageFileUrl(candidateHd) || candidateHd.includes('assets.science.nasa.gov'));
+
+  return {
+    mediaType: 'image',
+    url,
+    hdurl: hasValidHdLink ? candidateHd : url.split('?')[0],
+    thumbnailUrl: '',
+  };
+}
+
+function extractHeroExplanation(sectionSlice, lowerSlice) {
+  const element = extractElementByClass(
+    sectionSlice,
+    lowerSlice,
+    ['p'],
+    'media-detail-hero__description'
+  );
+  if (!element) {
+    return '';
+  }
+
+  let text = stripHtmlTags(element.innerHtml);
+  if (text.toLowerCase().startsWith('explanation:')) {
+    text = text.slice('explanation:'.length).trim();
+  }
+
+  const nextMarker = text.toLowerCase().indexOf("tomorrow's picture:");
+  if (nextMarker !== -1) {
+    text = text.slice(0, nextMarker).trim();
+  }
+
+  return text;
+}
+
+function extractHeroCredit(sectionSlice, lowerSlice) {
+  let cursor = 0;
+
+  while (cursor < lowerSlice.length) {
+    const thTag = findNextTag(sectionSlice, lowerSlice, 'th', cursor);
+    if (!thTag) {
+      return '';
+    }
+
+    const thClose = lowerSlice.indexOf('</th>', thTag.end);
+    if (thClose === -1) {
+      return '';
+    }
+
+    const headerLabel = stripHtmlTags(sectionSlice.slice(thTag.end, thClose)).toLowerCase();
+    if (headerLabel.startsWith('credit')) {
+      const tdTag = findNextTag(sectionSlice, lowerSlice, 'td', thClose);
+      const tdClose = tdTag ? lowerSlice.indexOf('</td>', tdTag.end) : -1;
+      if (tdTag && tdClose !== -1) {
+        return stripHtmlTags(sectionSlice.slice(tdTag.end, tdClose));
+      }
+      return '';
+    }
+
+    cursor = thClose + '</th>'.length;
+  }
+
+  return '';
 }
 
 function extractApodFromScienceHtml(html, targetDate) {
@@ -273,83 +557,34 @@ function extractApodFromScienceHtml(html, targetDate) {
   }
 
   const sectionSlice = html.slice(lastHeroIdx, lastHeroIdx + 20000);
-  const titleMatch = sectionSlice.match(
-    /<h[12][^>]*class="[^"]*display-48[^"]*"[^>]*>([\s\S]*?)<\/h[12]>/i
-  );
+  const lowerSlice = sectionSlice.toLowerCase();
+  const titleElement = extractElementByClass(sectionSlice, lowerSlice, ['h1', 'h2'], 'display-48');
 
-  if (!titleMatch) {
+  if (!titleElement) {
     return null;
   }
 
-  const mediaBlock = sectionSlice.slice(0, titleMatch.index);
-  const title = stripHtmlTags(titleMatch[1]);
+  const title = stripHtmlTags(titleElement.innerHtml);
   if (!title) {
     return null;
   }
 
-  let mediaType = 'other';
-  let url = '';
-  let hdurl = '';
-  let thumbnailUrl = '';
-
-  const iframeMatch = mediaBlock.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-  const videoSourceMatch =
-    mediaBlock.match(/<video[\s\S]*?<source[^>]+src=["']([^"']+)["']/i) ||
-    mediaBlock.match(/<video[^>]+src=["']([^"']+)["']/i);
-  const imgMatch = mediaBlock.match(/<img[^>]+src=["']([^"']+)["']/i);
-
-  if (iframeMatch) {
-    mediaType = 'video';
-    url = decodeHtmlEntities(iframeMatch[1]).trim();
-    const ytMatch = url.match(/youtube\.com\/embed\/([^?&"/]+)/i);
-    if (ytMatch) {
-      thumbnailUrl = `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
-    }
-  } else if (videoSourceMatch) {
-    mediaType = 'video';
-    url = decodeHtmlEntities(videoSourceMatch[1]).trim();
-  } else if (imgMatch) {
-    mediaType = 'image';
-    url = decodeHtmlEntities(imgMatch[1]).trim();
-    const anchorMatch = mediaBlock.match(/<a[^>]+href=["']([^"']+)["']/i);
-    if (anchorMatch) {
-      const candidateHd = decodeHtmlEntities(anchorMatch[1]).trim();
-      if (
-        /\.(jpe?g|png|gif|webp)(\?.*)?$/i.test(candidateHd) ||
-        candidateHd.includes('assets.science.nasa.gov')
-      ) {
-        hdurl = candidateHd;
-      }
-    }
-    if (!hdurl) {
-      hdurl = url.split('?')[0];
-    }
-  } else {
+  const media = extractHeroMedia(sectionSlice.slice(0, titleElement.index));
+  if (!media) {
     return null;
   }
 
-  const explanationMatch = sectionSlice.match(
-    /<p[^>]*class="[^"]*media-detail-hero__description[^"]*"[^>]*>([\s\S]*?)<\/p>/i
-  );
-  let explanation = explanationMatch ? stripHtmlTags(explanationMatch[1]) : '';
-  explanation = explanation
-    .replace(/^Explanation:\s*/i, '')
-    .replace(/\s*Tomorrow's picture:[\s\S]*$/i, '')
-    .trim();
-
-  const creditMatch = sectionSlice.match(
-    /<th[^>]*>\s*Credit[^<]*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i
-  );
-  const copyright = creditMatch ? stripHtmlTags(creditMatch[1]) : '';
+  const explanation = extractHeroExplanation(sectionSlice, lowerSlice);
+  const copyright = extractHeroCredit(sectionSlice, lowerSlice);
 
   return sanitizeApodPayload({
     title,
     date: targetDate,
     explanation: explanation || 'Explicação não fornecida pela NASA para esta data.',
-    media_type: mediaType,
-    url,
-    hdurl,
-    thumbnail_url: thumbnailUrl,
+    media_type: media.mediaType,
+    url: media.url,
+    hdurl: media.hdurl,
+    thumbnail_url: media.thumbnailUrl,
     copyright,
   });
 }
@@ -433,7 +668,7 @@ function isBrokenApiPlaceholder(payload) {
     return true;
   }
 
-  const hasBrokenLogo = Boolean(payload.url && payload.url.includes('nasa-logo@2x.png'));
+  const hasBrokenLogo = Boolean(payload.url?.includes('nasa-logo@2x.png'));
   const hasGenericTitle = payload.title === 'NASA Science';
   return hasBrokenLogo || hasGenericTitle || !payload.url;
 }
@@ -451,17 +686,20 @@ async function fetchApodFromNasa(dateValue) {
   const officialResult = officialOutcome.status === 'fulfilled' ? officialOutcome.value : null;
   const portalData = portalOutcome.status === 'fulfilled' ? portalOutcome.value : null;
 
-  if (officialResult && officialResult.ok && !isBrokenApiPlaceholder(officialResult.data)) {
+  if (officialResult?.ok && !isBrokenApiPlaceholder(officialResult.data)) {
     cacheApodResult(dateValue, officialResult.data);
     return officialResult.data;
   }
 
-  if (portalData && portalData.url) {
+  if (portalData?.url) {
     cacheApodResult(dateValue, portalData);
     return portalData;
   }
 
-  if (officialResult && !officialResult.ok && (officialResult.status === 400 || officialResult.status === 404)) {
+  if (
+    officialResult?.ok === false &&
+    (officialResult.status === 400 || officialResult.status === 404)
+  ) {
     const mapped = mapUpstreamError(officialResult.status);
     const notFoundError = new Error(mapped.message);
     notFoundError.statusCode = mapped.status;
@@ -498,7 +736,7 @@ app.get('/api/apod', async (req, res) => {
     const apodData = await fetchApodFromNasa(requestedDate);
     return res.json(apodData);
   } catch (error) {
-    const statusCode = error.statusCode || 500;
+    const statusCode = error.statusCode ?? 500;
     const message =
       error.statusCode && error.message
         ? error.message
@@ -509,7 +747,7 @@ app.get('/api/apod', async (req, res) => {
   }
 });
 
-app.use('/api', (req, res) => {
+app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Rota de API não encontrada.' });
 });
 

@@ -38,7 +38,8 @@
           <small id="date-help" class="control-help">Arquivo disponível desde 16/06/1995.</small>
         </div>
 
-        <div class="nav-buttons" role="group" aria-label="Navegação rápida entre datas">
+        <fieldset class="nav-buttons">
+          <legend class="sr-only">Navegação rápida entre datas</legend>
           <button type="button" id="prev-day-btn" class="btn btn-secondary">
             ◀ Dia Anterior
           </button>
@@ -51,27 +52,25 @@
           <button type="button" id="random-day-btn" class="btn btn-ghost">
             Data Aleatória
           </button>
-        </div>
+        </fieldset>
       </form>
     </section>
 
-    <section
+    <output
       id="loading-state"
       class="status-card loading-card"
-      role="status"
       aria-live="polite"
       hidden
     >
-      <div class="cosmic-spinner" aria-hidden="true"></div>
-      <h2>Carregando registro do cosmos...</h2>
-      <p>Consultando os arquivos da NASA com segurança. Aguarde um instante.</p>
-    </section>
+      <span class="cosmic-spinner" aria-hidden="true"></span>
+      <span class="status-title">Carregando registro do cosmos...</span>
+      <span class="status-text">Consultando os arquivos da NASA com segurança. Aguarde um instante.</span>
+    </output>
 
-    <section
+    <div
       id="error-state"
       class="status-card error-card"
       role="alert"
-      aria-live="assertive"
       hidden
     >
       <div class="error-icon" aria-hidden="true">!</div>
@@ -85,7 +84,7 @@
           Voltar para Hoje
         </button>
       </div>
-    </section>
+    </div>
 
     <article id="apod-content" class="apod-card" hidden>
       <header class="apod-header">
